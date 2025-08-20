@@ -1,42 +1,52 @@
 {
   "expo": {
     "name": "EndoCare",
-    "slug": "EndoCare",
-    "version": "1.0.0",
+    "slug": "endocare",
+    "version": "1.2.2",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
     "scheme": "endocare",
-    "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#b5407a"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.racsolutions.endocare",
+      "buildNumber": "5",
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "EndoCare stores health data locally on your device to help you track endometriosis symptoms.",
+        "NSHealthUpdateUsageDescription": "EndoCare stores health data locally on your device to help you track endometriosis symptoms.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#b5407a"
       },
-      "edgeToEdgeEnabled": true
+      "package": "com.racsolutions.endocare",
+      "versionCode": 4,
+      "permissions": [
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
-      "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-router",
-      [
-        "expo-splash-screen",
-        {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
-        }
-      ]
+      "expo-router"
     ],
-    "experiments": {
-      "typedRoutes": true
+    "privacy": "https://ra-endo-care-app-pp.netlify.app/",
+    "extra": {
+      "eas": {
+        "projectId": "c838bf60-a9f4-4025-b852-5478d54712d8"
+      }
     }
   }
 }
