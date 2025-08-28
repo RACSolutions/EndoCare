@@ -18,10 +18,8 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.racsolutions.endocare",
-      "buildNumber": "5",
+      "buildNumber": "6",
       "infoPlist": {
-        "NSHealthShareUsageDescription": "EndoCare stores health data locally on your device to help you track endometriosis symptoms.",
-        "NSHealthUpdateUsageDescription": "EndoCare stores health data locally on your device to help you track endometriosis symptoms.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
