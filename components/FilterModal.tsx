@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { activityCategories, colors, symptomCategories } from '../utils/constants';
+import { activityCategories, colors } from '../utils/constants';
+import { getCombinedSymptomCategories } from '../utils/symptomUtils';
 
 interface FilterModalProps {
   isVisible: boolean;
@@ -15,6 +16,8 @@ interface FilterModalProps {
   selectedFilters: string[];
   onClose: () => void;
   onApplyFilters: (filters: string[]) => void;
+  customSymptoms?: { [category: string]: string[] };
+  customActivities?: string[];
 }
 
 export const FilterModal: React.FC<FilterModalProps> = ({
@@ -23,9 +26,14 @@ export const FilterModal: React.FC<FilterModalProps> = ({
   selectedFilters,
   onClose,
   onApplyFilters,
+  customSymptoms = {},
+  customActivities = [],
 }) => {
   const [tempFilters, setTempFilters] = useState<string[]>(selectedFilters);
   const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
+
+  // Get combined symptom categories (default + custom)
+  const combinedSymptomCategories = getCombinedSymptomCategories(customSymptoms);
 
   const toggleFilter = (item: string) => {
     setTempFilters(prev => 
@@ -36,7 +44,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({
   };
 
   const toggleCategory = (categoryKey: string) => {
-    const category = symptomCategories[categoryKey];
+    const category = combinedSymptomCategories[categoryKey];
     if (!category) return;
 
     const allCategorySymptoms = category.symptoms;
@@ -83,21 +91,22 @@ export const FilterModal: React.FC<FilterModalProps> = ({
 
   const selectAll = () => {
     if (filterType === 'symptoms') {
-      // Get all symptom names from all categories
+      // Get all symptom names from all categories (including custom)
       const allSymptoms: string[] = [];
-      Object.values(symptomCategories).forEach(category => {
+      Object.values(combinedSymptomCategories).forEach(category => {
         allSymptoms.push(...category.symptoms);
       });
       setTempFilters(allSymptoms);
     } else {
-      // Get all activity names
+      // Get all activity names (default + custom)
       const allActivities = Object.values(activityCategories).map(activity => activity.name);
-      setTempFilters(allActivities);
+      const allCustomActivities = customActivities;
+      setTempFilters([...allActivities, ...allCustomActivities]);
     }
   };
 
   const getCategoryStatus = (categoryKey: string) => {
-    const category = symptomCategories[categoryKey];
+    const category = combinedSymptomCategories[categoryKey];
     if (!category) return 'none';
 
     const categorySymptoms = category.symptoms;
@@ -111,7 +120,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({
   };
 
   const renderSymptoms = () => {
-    return Object.entries(symptomCategories).map(([categoryKey, category]) => {
+    return Object.entries(combinedSymptomCategories).map(([categoryKey, category]) => {
       const isExpanded = expandedCategories.includes(categoryKey);
       const categoryStatus = getCategoryStatus(categoryKey);
       const selectedCount = category.symptoms.filter(symptom => 
@@ -178,10 +187,12 @@ export const FilterModal: React.FC<FilterModalProps> = ({
   };
 
   const renderActivities = () => {
-    const selectedActivitiesCount = Object.values(activityCategories).filter(activity => 
-      tempFilters.includes(activity.name)
+    const defaultActivities = Object.values(activityCategories).map(a => a.name);
+    const allActivities = [...defaultActivities, ...customActivities];
+    const selectedActivitiesCount = allActivities.filter(activity => 
+      tempFilters.includes(activity)
     ).length;
-    const allActivitiesSelected = selectedActivitiesCount === Object.values(activityCategories).length;
+    const allActivitiesSelected = selectedActivitiesCount === allActivities.length;
 
     return (
       <View style={styles.categorySection}>
@@ -195,16 +206,15 @@ export const FilterModal: React.FC<FilterModalProps> = ({
             ]}
             onPress={() => {
               if (allActivitiesSelected) {
-                // Deselect all activities
+                // Deselect all activities (default + custom)
                 setTempFilters(prev => 
-                  prev.filter(filter => !Object.values(activityCategories).map(a => a.name).includes(filter))
+                  prev.filter(filter => !allActivities.includes(filter))
                 );
               } else {
-                // Select all activities
-                const allActivityNames = Object.values(activityCategories).map(a => a.name);
+                // Select all activities (default + custom)
                 setTempFilters(prev => {
-                  const filtered = prev.filter(filter => !allActivityNames.includes(filter));
-                  return [...filtered, ...allActivityNames];
+                  const filtered = prev.filter(filter => !allActivities.includes(filter));
+                  return [...filtered, ...allActivities];
                 });
               }
             }}
@@ -222,6 +232,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({
 
         {/* Individual Activities */}
         <View style={styles.activitiesContainer}>
+          {/* Default Activities */}
           {Object.values(activityCategories).map((activity) => (
             <TouchableOpacity
               key={activity.name}
@@ -236,6 +247,26 @@ export const FilterModal: React.FC<FilterModalProps> = ({
                 tempFilters.includes(activity.name) && styles.activityTextSelected
               ]}>
                 {activity.icon} {activity.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+          
+          {/* Custom Activities */}
+          {customActivities.map((activity, index) => (
+            <TouchableOpacity
+              key={`custom-${index}`}
+              style={[
+                styles.activityItem,
+                tempFilters.includes(activity) && styles.activityItemSelected
+              ]}
+              onPress={() => toggleFilter(activity)}
+            >
+              <Text style={[
+                styles.activityText,
+                tempFilters.includes(activity) && styles.activityTextSelected
+              ]}>
+                🔍 {activity}
+                <Text style={styles.customBadge}> CUSTOM</Text>
               </Text>
             </TouchableOpacity>
           ))}
@@ -277,13 +308,13 @@ export const FilterModal: React.FC<FilterModalProps> = ({
         {filterType === 'symptoms' ? (
           <View style={styles.instructionsContainer}>
             <Text style={styles.instructionsText}>
-              Use "Select None" to filter by activities only, or tap category names to select all symptoms in that category
+              Use &ldquo;Select None&rdquo; to filter by activities only, or tap category names to select all symptoms in that category
             </Text>
           </View>
         ) : (
           <View style={styles.instructionsContainer}>
             <Text style={styles.instructionsText}>
-              Use "Select None" to filter by symptoms only, or tap the category to select all activities
+              Use &ldquo;Select None&rdquo; to filter by symptoms only, or tap the category to select all activities
             </Text>
           </View>
         )}
@@ -497,5 +528,14 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 16,
     fontWeight: '600',
+  },
+  customBadge: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.primary,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 2,
   },
 });

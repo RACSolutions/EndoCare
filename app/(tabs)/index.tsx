@@ -1,6 +1,7 @@
 import { useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
@@ -12,15 +13,23 @@ import {
   View
 } from 'react-native';
 import { CategoryCard } from '../../components/CategoryCard';
+import { CustomActivityModal } from '../../components/CustomActivityModal';
+import { CustomSymptomModal } from '../../components/CustomSymptomModal';
+import { EndoFactsBanner } from '../../components/EndoFactsBanner';
+import { ErrorBoundary } from '../../components/ErrorBoundary';
+import { SectionErrorBoundary } from '../../components/SectionErrorBoundary';
 import { SymptomModal } from '../../components/SymptomModal';
 import { useEndoData } from '../../hooks/useEndoData';
 import { activityCategories, colors, symptomCategories } from '../../utils/constants';
+import { getCombinedSymptomCategories } from '../../utils/symptomUtils';
 
 export default function DailyScreen() {
   const { selectedDate: paramDate, scrollToTop } = useLocalSearchParams();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isCustomSymptomModalVisible, setIsCustomSymptomModalVisible] = useState(false);
+  const [isCustomActivityModalVisible, setIsCustomActivityModalVisible] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const customActivitiesRef = useRef<TextInput>(null);
   const notesRef = useRef<TextInput>(null);
@@ -28,11 +37,50 @@ export default function DailyScreen() {
   // Update selected date when coming from calendar
   useEffect(() => {
     if (paramDate && typeof paramDate === 'string') {
-      // Parse date in local timezone to avoid offset issues
-      const [year, month, day] = paramDate.split('-').map(Number);
-      const date = new Date(year, month - 1, day); // month is 0-indexed
-      if (!isNaN(date.getTime())) {
-        setSelectedDate(date);
+      try {
+        // Validate date format (YYYY-MM-DD)
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(paramDate)) {
+          console.warn('Invalid date format:', paramDate);
+          return;
+        }
+        
+        // Parse date in local timezone to avoid offset issues
+        const parts = paramDate.split('-');
+        if (parts.length !== 3) {
+          console.warn('Invalid date parts:', paramDate);
+          return;
+        }
+        
+        const [year, month, day] = parts.map(Number);
+        
+        // Validate date components
+        if (year < 1900 || year > 2100) {
+          console.warn('Invalid year:', year);
+          return;
+        }
+        if (month < 1 || month > 12) {
+          console.warn('Invalid month:', month);
+          return;
+        }
+        if (day < 1 || day > 31) {
+          console.warn('Invalid day:', day);
+          return;
+        }
+        
+        const date = new Date(year, month - 1, day); // month is 0-indexed
+        
+        // Additional validation: check if the date is valid
+        if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+          console.warn('Invalid date components create invalid date:', paramDate);
+          return;
+        }
+        
+        if (!isNaN(date.getTime())) {
+          setSelectedDate(date);
+        }
+      } catch (error) {
+        console.error('Error parsing date parameter:', error);
       }
     }
   }, [paramDate]);
@@ -50,9 +98,44 @@ export default function DailyScreen() {
     getCurrentEntry,
     updateEntry,
     getCategorySymptomCount,
+    profileData,
+    addCustomSymptom,
+    addCustomActivity,
+    isLoaded
   } = useEndoData();
 
   const currentEntry = getCurrentEntry(selectedDate);
+
+  // Get combined symptom categories (default + custom)
+  const combinedSymptomCategories = getCombinedSymptomCategories(profileData?.customSymptoms);
+
+  // Handler for adding custom symptoms
+  const handleAddCustomSymptom = (category: string, symptom: string) => {
+    addCustomSymptom(category, symptom);
+  };
+
+  // Handler for adding custom activities
+  const handleAddCustomActivity = (activity: string) => {
+    addCustomActivity(activity);
+  };
+
+  // Toggle custom activity
+  const toggleCustomActivity = (activity: string) => {
+    const currentActivities = currentEntry.activities || [];
+    const isActive = currentActivities.includes(activity);
+    
+    if (isActive) {
+      // Remove activity
+      updateEntry(selectedDate, {
+        activities: currentActivities.filter(a => a !== activity)
+      });
+    } else {
+      // Add activity
+      updateEntry(selectedDate, {
+        activities: [...currentActivities, activity]
+      });
+    }
+  };
 
   // Helper function to scroll to input when focused
   const scrollToInput = (inputRef: React.RefObject<TextInput>) => {
@@ -183,13 +266,33 @@ export default function DailyScreen() {
            currentEntry.noSymptomsRecorded;
   };
 
+  // Show loading indicator while data is loading
+  if (!isLoaded) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>✨ EndoCare ✨</Text>
+          <Text style={styles.headerSubtitle}>Your personal endometriosis tracker</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading your data...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>✨ EndoCare ✨</Text>
-        <Text style={styles.headerSubtitle}>Your personal endometriosis tracker</Text>
-      </View>
+    <ErrorBoundary
+      fallbackTitle="Daily Tracker Error"
+      fallbackMessage="Something went wrong with the daily symptom tracker. Please restart the app and try again."
+    >
+      <SafeAreaView style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>✨ EndoCare ✨</Text>
+          <Text style={styles.headerSubtitle}>Your personal endometriosis tracker</Text>
+        </View>
 
       <KeyboardAvoidingView 
         style={styles.keyboardAvoidingView}
@@ -205,7 +308,13 @@ export default function DailyScreen() {
         >
           {/* Date Navigation */}
           <View style={styles.dateNavigation}>
-            <TouchableOpacity onPress={() => changeDate(-1)} style={styles.navButton}>
+            <TouchableOpacity 
+              onPress={() => changeDate(-1)} 
+              style={styles.navButton}
+              accessibilityRole="button"
+              accessibilityLabel="Previous day"
+              accessibilityHint="Go to previous day"
+            >
               <Text style={styles.navButtonText}>‹</Text>
             </TouchableOpacity>
 
@@ -223,6 +332,10 @@ export default function DailyScreen() {
                 isFutureDate(new Date(selectedDate.getTime() + 24 * 60 * 60 * 1000)) && styles.navButtonDisabled
               ]}
               disabled={isFutureDate(new Date(selectedDate.getTime() + 24 * 60 * 60 * 1000))}
+              accessibilityRole="button"
+              accessibilityLabel="Next day"
+              accessibilityHint="Go to next day"
+              accessibilityState={{ disabled: isFutureDate(new Date(selectedDate.getTime() + 24 * 60 * 60 * 1000)) }}
             >
               <Text style={[
                 styles.navButtonText,
@@ -240,10 +353,16 @@ export default function DailyScreen() {
             </View>
           )}
 
+          {/* Endometriosis Facts Banner */}
+          {isToday(selectedDate) && (
+            <EndoFactsBanner />
+          )}
+
           {/* Symptom Categories */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>🌟 How are you feeling today?</Text>
-            <Text style={styles.scrollHint}>👆 Tap categories below • Swipe to see more →</Text>
+          <SectionErrorBoundary sectionName="Symptom Categories">
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>🌟 How are you feeling today?</Text>
+              <Text style={styles.scrollHint}>👆 Tap categories below • Swipe to see more →</Text>
             
             {/* No Symptoms Button */}
             <TouchableOpacity 
@@ -252,6 +371,9 @@ export default function DailyScreen() {
                 styles.noSymptomsButton,
                 currentEntry.noSymptomsRecorded && styles.noSymptomsButtonActive
               ]}
+              accessibilityRole="button"
+              accessibilityLabel={currentEntry.noSymptomsRecorded ? "No symptoms recorded" : "Record no symptoms"}
+              accessibilityHint={currentEntry.noSymptomsRecorded ? "Tap to undo and add symptoms" : "Tap if you feel well today"}
             >
               <Text style={[
                 styles.noSymptomsButtonText,
@@ -274,7 +396,7 @@ export default function DailyScreen() {
                 style={styles.categoryScrollView}
                 contentContainerStyle={styles.categoryContainer}
               >
-                {Object.entries(symptomCategories).map(([categoryKey, category]) => {
+                {Object.entries(combinedSymptomCategories).map(([categoryKey, category]) => {
                   const symptomCount = getCategorySymptomCount(selectedDate, categoryKey);
                   
                   return (
@@ -290,9 +412,22 @@ export default function DailyScreen() {
                     />
                   );
                 })}
+                
+                {/* Add Custom Symptom Button */}
+                <TouchableOpacity
+                  style={styles.addCustomButton}
+                  onPress={() => setIsCustomSymptomModalVisible(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add custom symptom"
+                  accessibilityHint="Create a new custom symptom to track"
+                >
+                  <Text style={styles.addCustomIcon}>+</Text>
+                  <Text style={styles.addCustomText}>Add Custom</Text>
+                </TouchableOpacity>
               </ScrollView>
             )}
-          </View>
+            </View>
+          </SectionErrorBoundary>
 
           {/* Activities */}
           <View style={styles.section}>
@@ -320,7 +455,48 @@ export default function DailyScreen() {
                   />
                 );
               })}
+              
+              {/* Add Custom Activity Button */}
+              <TouchableOpacity
+                style={[styles.addCustomButton, { minWidth: 120 }]}
+                onPress={() => setIsCustomActivityModalVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Add custom activity"
+                accessibilityHint="Create a new custom activity or trigger to track"
+              >
+                <Text style={styles.addCustomIcon}>+</Text>
+                <Text style={styles.addCustomText}>Add Custom Activity</Text>
+              </TouchableOpacity>
             </ScrollView>
+
+            {/* Custom Activities */}
+            {profileData?.customActivities && profileData.customActivities.length > 0 && (
+              <>
+                <Text style={styles.customActivitiesTitle}>Your Custom Activities:</Text>
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false} 
+                  style={styles.categoryScrollView}
+                  contentContainerStyle={styles.categoryContainer}
+                >
+                  {profileData.customActivities.map((activity, index) => {
+                    const isActive = currentEntry.activities?.includes(activity);
+                    
+                    return (
+                      <CategoryCard
+                        key={`custom-${index}`}
+                        categoryKey={`custom-${index}`}
+                        icon="🔍"
+                        name={activity}
+                        isActive={isActive}
+                        onPress={() => toggleCustomActivity(activity)}
+                        onClear={() => toggleCustomActivity(activity)}
+                      />
+                    );
+                  })}
+                </ScrollView>
+              </>
+            )}
 
             <TextInput
               ref={customActivitiesRef}
@@ -336,6 +512,8 @@ export default function DailyScreen() {
               onSubmitEditing={() => {
                 customActivitiesRef.current?.blur();
               }}
+              accessibilityLabel="Custom activities input"
+              accessibilityHint="Enter additional activities or triggers not listed above"
             />
           </View>
 
@@ -356,6 +534,8 @@ export default function DailyScreen() {
               onSubmitEditing={() => {
                 notesRef.current?.blur();
               }}
+              accessibilityLabel="Daily notes"
+              accessibilityHint="Record how you're feeling and any important observations"
             />
           </View>
         </ScrollView>
@@ -363,15 +543,34 @@ export default function DailyScreen() {
 
       {/* Modal */}
       {isModalVisible && (
-        <SymptomModal
-          isVisible={isModalVisible}
-          selectedCategory={selectedCategory}
-          currentEntry={currentEntry}
-          onClose={closeCategoryModal}
-          onSymptomChange={handleSymptomChange}
-        />
+        <SectionErrorBoundary sectionName="Symptom Modal">
+          <SymptomModal
+            isVisible={isModalVisible}
+            selectedCategory={selectedCategory}
+            currentEntry={currentEntry}
+            onClose={closeCategoryModal}
+            onSymptomChange={handleSymptomChange}
+            customSymptoms={profileData?.customSymptoms}
+          />
+        </SectionErrorBoundary>
       )}
-    </SafeAreaView>
+
+      {/* Custom Symptom Modal */}
+      <CustomSymptomModal
+        visible={isCustomSymptomModalVisible}
+        onClose={() => setIsCustomSymptomModalVisible(false)}
+        onAddSymptom={handleAddCustomSymptom}
+        categories={symptomCategories}
+      />
+
+      {/* Custom Activity Modal */}
+      <CustomActivityModal
+        visible={isCustomActivityModalVisible}
+        onClose={() => setIsCustomActivityModalVisible(false)}
+        onAddActivity={handleAddCustomActivity}
+      />
+      </SafeAreaView>
+    </ErrorBoundary>
   );
 }
 
@@ -586,5 +785,50 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.primary,
     fontWeight: '500',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: colors.gray600,
+    textAlign: 'center',
+  },
+  addCustomButton: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minWidth: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderStyle: 'dashed',
+    marginRight: 8,
+  },
+  addCustomIcon: {
+    fontSize: 24,
+    color: colors.primary,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  addCustomText: {
+    fontSize: 12,
+    color: colors.primary,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  customActivitiesTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.gray700,
+    marginTop: 16,
+    marginBottom: 8,
+    marginLeft: 4,
   },
 });

@@ -12,7 +12,7 @@ interface CategoryCardProps {
   onClear?: () => void;
 }
 
-export const CategoryCard: React.FC<CategoryCardProps> = ({
+export const CategoryCard = React.memo<CategoryCardProps>(({
   categoryKey,
   icon,
   name,
@@ -28,6 +28,9 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
         styles.categoryCard,
         isActive && styles.categoryCardActive
       ]}
+      accessibilityRole="button"
+      accessibilityLabel={`${name} category${isActive ? ', active' : ''}`}
+      accessibilityHint={`Tap to ${isActive ? 'edit' : 'add'} ${name.toLowerCase()} symptoms`}
     >
       {isActive && count !== undefined && count > 0 && (
         <>
@@ -56,7 +59,9 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
       </Text>
     </TouchableOpacity>
   );
-};
+});
+
+CategoryCard.displayName = 'CategoryCard';
 
 const styles = StyleSheet.create({
   categoryCard: {

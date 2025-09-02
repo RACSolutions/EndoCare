@@ -8,6 +8,7 @@ export interface SymptomEntry {
     activities: string[];
     notes: string;
     customActivities: string;
+    noSymptomsRecorded?: boolean;
   }
   
   export interface Medication {

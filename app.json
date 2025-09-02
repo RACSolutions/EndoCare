@@ -2,7 +2,7 @@
   "expo": {
     "name": "EndoCare",
     "slug": "endocare",
-    "version": "1.2.2",
+    "version": "1.5.0",
     "orientation": "portrait",
     "scheme": "endocare",
     "icon": "./assets/icon.png",
@@ -18,7 +18,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.racsolutions.endocare",
-      "buildNumber": "6",
+      "buildNumber": "9",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -29,7 +29,7 @@
         "backgroundColor": "#b5407a"
       },
       "package": "com.racsolutions.endocare",
-      "versionCode": 4,
+      "versionCode": 6,
       "permissions": [
         "android.permission.WRITE_EXTERNAL_STORAGE"
       ]

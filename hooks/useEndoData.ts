@@ -9,6 +9,8 @@ interface ProfileData {
   endoStage: string;
   surgeries: string[];
   selectedVitamins: string[];
+  customSymptoms: { [category: string]: string[] };
+  customActivities: string[];
 }
 
 export const useEndoData = () => {
@@ -21,7 +23,9 @@ export const useEndoData = () => {
     diagnosisYear: '',
     endoStage: '',
     surgeries: [],
-    selectedVitamins: []
+    selectedVitamins: [],
+    customSymptoms: {},
+    customActivities: []
   });
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -42,7 +46,11 @@ export const useEndoData = () => {
         if (savedDiagnoses) setDiagnoses(savedDiagnoses);
         if (savedProfileData) {
           console.log('Loaded profile data:', savedProfileData);
-          setProfileData({ ...savedProfileData });
+          setProfileData({ 
+            ...savedProfileData,
+            customSymptoms: savedProfileData.customSymptoms || {},
+            customActivities: savedProfileData.customActivities || []
+          });
         }
       } catch (error) {
         console.error('Error loading data:', error);
@@ -79,7 +87,6 @@ export const useEndoData = () => {
   // Save profile data when it changes (but only after initial load)
   useEffect(() => {
     if (isLoaded) {
-      console.log('Saving profile data to storage:', profileData);
       saveData('endoCareProfile', profileData);
     }
   }, [profileData, isLoaded]);
@@ -98,15 +105,7 @@ export const useEndoData = () => {
   const updateEntry = useCallback((selectedDate: Date, updates: Partial<SymptomEntry>) => {
     const dateStr = formatDate(selectedDate);
     
-    console.log('updateEntry called:', {
-      selectedDate: selectedDate.toString(),
-      dateStr,
-      updates
-    });
-    
     setEntries(prev => {
-      console.log('Previous entries keys:', Object.keys(prev));
-      
       const currentEntry = prev[dateStr] || {
         date: dateStr,
         symptoms: {},
@@ -126,15 +125,11 @@ export const useEndoData = () => {
         [dateStr]: updatedEntry
       };
       
-      console.log('New entries keys after update:', Object.keys(newEntries));
-      console.log('Updated entry for', dateStr, ':', updatedEntry);
-      
       return newEntries;
     });
   }, []);
 
   const updateProfileData = useCallback((updates: Partial<ProfileData>) => {
-    console.log('updateProfileData called:', updates);
     setProfileData(prev => ({
       ...prev,
       ...updates
@@ -154,13 +149,23 @@ export const useEndoData = () => {
     if (!entry || !entry.symptoms) return 0;
     
     let maxSeverity = 0;
-    Object.values(entry.symptoms).forEach((categorySymptoms: any) => {
-      Object.values(categorySymptoms).forEach((severity: any) => {
-        if (typeof severity === 'number' && severity > maxSeverity) {
-          maxSeverity = severity;
+    try {
+      Object.values(entry.symptoms).forEach((categorySymptoms) => {
+        // Validate that categorySymptoms is an object
+        if (!categorySymptoms || typeof categorySymptoms !== 'object') {
+          return;
         }
+        
+        Object.values(categorySymptoms).forEach((severity) => {
+          // Validate that severity is a number
+          if (typeof severity === 'number' && !isNaN(severity) && severity > maxSeverity) {
+            maxSeverity = severity;
+          }
+        });
       });
-    });
+    } catch (error) {
+      console.error('Error processing symptom severity:', error);
+    }
     return maxSeverity;
   }, [entries]);
 
@@ -168,16 +173,27 @@ export const useEndoData = () => {
     const symptomFrequency: { [symptom: string]: number } = {};
     let totalEntries = 0;
 
-    Object.values(entries).forEach(entry => {
-      if (entry.symptoms && Object.keys(entry.symptoms).length > 0) {
-        totalEntries++;
-        Object.values(entry.symptoms).forEach((categorySymptoms: any) => {
-          Object.keys(categorySymptoms).forEach(symptom => {
-            symptomFrequency[symptom] = (symptomFrequency[symptom] || 0) + 1;
+    try {
+      Object.values(entries).forEach(entry => {
+        if (entry && entry.symptoms && typeof entry.symptoms === 'object' && Object.keys(entry.symptoms).length > 0) {
+          totalEntries++;
+          Object.values(entry.symptoms).forEach((categorySymptoms) => {
+            // Validate that categorySymptoms is an object
+            if (!categorySymptoms || typeof categorySymptoms !== 'object') {
+              return;
+            }
+            
+            Object.keys(categorySymptoms).forEach(symptom => {
+              if (typeof symptom === 'string') {
+                symptomFrequency[symptom] = (symptomFrequency[symptom] || 0) + 1;
+              }
+            });
           });
-        });
-      }
-    });
+        }
+      });
+    } catch (error) {
+      console.error('Error processing analysis data:', error);
+    }
 
     return { symptomFrequency, totalEntries };
   }, [entries]);
@@ -186,7 +202,6 @@ export const useEndoData = () => {
     try {
       const savedEntries = await loadData('endoCareEntries');
       if (savedEntries) {
-        console.log('Force refreshed entries from storage:', Object.keys(savedEntries));
         setEntries({ ...savedEntries });
       }
     } catch (error) {
@@ -197,10 +212,59 @@ export const useEndoData = () => {
   const debugEntry = useCallback((date: Date) => {
     const dateStr = formatDate(date);
     const entry = entries[dateStr];
-    console.log(`Debug entry for ${dateStr}:`, entry);
-    console.log('All entries:', Object.keys(entries));
     return entry;
   }, [entries]);
+
+  const addCustomSymptom = useCallback((category: string, symptom: string) => {
+    setProfileData(prev => {
+      const newCustomSymptoms = { ...prev.customSymptoms };
+      if (!newCustomSymptoms[category]) {
+        newCustomSymptoms[category] = [];
+      }
+      if (!newCustomSymptoms[category].includes(symptom)) {
+        newCustomSymptoms[category].push(symptom);
+      }
+      return {
+        ...prev,
+        customSymptoms: newCustomSymptoms
+      };
+    });
+  }, []);
+
+  const removeCustomSymptom = useCallback((category: string, symptom: string) => {
+    setProfileData(prev => {
+      const newCustomSymptoms = { ...prev.customSymptoms };
+      if (newCustomSymptoms[category]) {
+        newCustomSymptoms[category] = newCustomSymptoms[category].filter(s => s !== symptom);
+        if (newCustomSymptoms[category].length === 0) {
+          delete newCustomSymptoms[category];
+        }
+      }
+      return {
+        ...prev,
+        customSymptoms: newCustomSymptoms
+      };
+    });
+  }, []);
+
+  const addCustomActivity = useCallback((activity: string) => {
+    setProfileData(prev => {
+      if (!prev.customActivities.includes(activity)) {
+        return {
+          ...prev,
+          customActivities: [...prev.customActivities, activity]
+        };
+      }
+      return prev;
+    });
+  }, []);
+
+  const removeCustomActivity = useCallback((activity: string) => {
+    setProfileData(prev => ({
+      ...prev,
+      customActivities: prev.customActivities.filter(a => a !== activity)
+    }));
+  }, []);
 
   return {
     entries,
@@ -217,6 +281,10 @@ export const useEndoData = () => {
     getAnalysisData,
     refreshEntries,
     debugEntry,
+    addCustomSymptom,
+    removeCustomSymptom,
+    addCustomActivity,
+    removeCustomActivity,
     isLoaded
   };
 };

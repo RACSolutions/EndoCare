@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { SymptomEntry } from '../types';
 import { colors, symptomCategories } from '../utils/constants';
+import { getSymptomsByCategory, isCustomSymptom } from '../utils/symptomUtils';
 
 interface SymptomModalProps {
   isVisible: boolean;
@@ -15,18 +16,21 @@ interface SymptomModalProps {
   currentEntry: SymptomEntry;
   onClose: () => void;
   onSymptomChange: (category: string, symptom: string, severity: number) => void;
+  customSymptoms?: { [category: string]: string[] };
 }
 
-export const SymptomModal: React.FC<SymptomModalProps> = ({
+export const SymptomModal = React.memo<SymptomModalProps>(({
   isVisible,
   selectedCategory,
   currentEntry,
   onClose,
   onSymptomChange,
+  customSymptoms = {},
 }) => {
   if (!isVisible || !selectedCategory) return null;
   
   const category = symptomCategories[selectedCategory];
+  const allSymptoms = getSymptomsByCategory(selectedCategory, customSymptoms);
 
   return (
     <View style={styles.modalOverlay}>
@@ -35,7 +39,12 @@ export const SymptomModal: React.FC<SymptomModalProps> = ({
           <Text style={styles.modalTitle}>
             {category.icon} {category.name}
           </Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+          <TouchableOpacity 
+            onPress={onClose} 
+            style={styles.closeButton}
+            accessibilityRole="button"
+            accessibilityLabel="Close symptom modal"
+          >
             <Text style={styles.closeButtonText}>✕</Text>
           </TouchableOpacity>
         </View>
@@ -51,12 +60,16 @@ export const SymptomModal: React.FC<SymptomModalProps> = ({
             <Text style={styles.scrollHint}>↓ Scroll to see all symptoms ↓</Text>
           </View>
           
-          {category.symptoms.map(symptom => {
+          {allSymptoms.map(symptom => {
             const currentSeverity = currentEntry.symptoms[selectedCategory]?.[symptom] || 0;
+            const isCustom = isCustomSymptom(selectedCategory, symptom, customSymptoms);
 
             return (
               <View key={symptom} style={styles.modalSymptomRow}>
-                <Text style={styles.modalSymptomName}>{symptom}</Text>
+                <View style={styles.symptomNameContainer}>
+                  <Text style={styles.modalSymptomName}>{symptom}</Text>
+                  {isCustom && <Text style={styles.customSymptomBadge}>Custom</Text>}
+                </View>
                 <View style={styles.modalSeverityButtons}>
                   {[1, 2, 3].map(level => (
                     <TouchableOpacity
@@ -69,6 +82,9 @@ export const SymptomModal: React.FC<SymptomModalProps> = ({
                         { borderColor: currentSeverity === level ? colors.primary : colors.gray300 },
                         currentSeverity === level && { backgroundColor: colors.primary }
                       ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${symptom} severity level ${level}${currentSeverity === level ? ', selected' : ''}`}
+                      accessibilityHint={`Set ${symptom.toLowerCase()} severity to ${level === 1 ? 'low' : level === 2 ? 'medium' : 'high'}`}
                     >
                       <Text style={[
                         styles.modalSeverityText,
@@ -84,13 +100,20 @@ export const SymptomModal: React.FC<SymptomModalProps> = ({
           })}
         </ScrollView>
 
-        <TouchableOpacity onPress={onClose} style={styles.modalDoneButton}>
+        <TouchableOpacity 
+          onPress={onClose} 
+          style={styles.modalDoneButton}
+          accessibilityRole="button"
+          accessibilityLabel="Done editing symptoms"
+        >
           <Text style={styles.modalDoneText}>Done</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
-};
+});
+
+SymptomModal.displayName = 'SymptomModal';
 
 const styles = StyleSheet.create({
   modalOverlay: {
@@ -207,5 +230,21 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 16,
     fontWeight: '600',
+  },
+  symptomNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 8,
+  },
+  customSymptomBadge: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.primary,
+    textTransform: 'uppercase',
   },
 });

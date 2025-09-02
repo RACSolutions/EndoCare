@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
+  Linking,
   Modal,
   Platform,
   SafeAreaView,
@@ -10,7 +12,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import RNIap, { Product, PurchaseResult } from 'react-native-iap';
 import { useEndoData } from '../../hooks/useEndoData';
+import { useAppRating } from '../../hooks/useAppRating';
 import { colors } from '../../utils/constants';
 
 const commonVitamins = [
@@ -136,6 +140,7 @@ const FormModal: React.FC<FormModalProps> = ({ visible, title, fields, onSubmit,
 
 export default function ProfileScreen() {
   const { medications, diagnoses, profileData, setMedications, setDiagnoses, updateProfileData, isLoaded } = useEndoData();
+  const { manuallyPromptRating } = useAppRating();
   
   // Local state that syncs with profileData
   const [name, setName] = useState('');
@@ -160,6 +165,10 @@ export default function ProfileScreen() {
 
   // Flag to prevent auto-save during initial sync
   const isInitialSync = useRef(true);
+
+  // Tip jar state
+  const [tipProducts, setTipProducts] = useState<Product[]>([]);
+  const [isProcessingTip, setIsProcessingTip] = useState<string | null>(null);
 
   // Sync local state with profileData when it loads - ONLY ONCE
   useEffect(() => {
@@ -309,6 +318,253 @@ export default function ProfileScreen() {
     setSurgeries(surgeries.filter((_, i) => i !== index));
   };
 
+  const handleBugReport = () => {
+    const subject = encodeURIComponent('EndoCare Bug Report');
+    const body = encodeURIComponent(
+      'Please describe the bug you encountered:\n\n' +
+      'Steps to reproduce:\n1. \n2. \n3. \n\n' +
+      'Expected behavior:\n\n' +
+      'Actual behavior:\n\n' +
+      'Device info:\n' +
+      `- Platform: ${Platform.OS}\n` +
+      `- App Version: 1.0\n\n` +
+      'Additional details:'
+    );
+    const emailUrl = `mailto:rachael.alexander91@outlook.com?subject=${subject}&body=${body}`;
+    
+    Linking.canOpenURL(emailUrl)
+      .then((supported) => {
+        if (supported) {
+          Linking.openURL(emailUrl);
+        } else {
+          Alert.alert(
+            'Email Not Available',
+            'Please send your bug report to rachael.alexander91@outlook.com',
+            [{ text: 'OK' }]
+          );
+        }
+      })
+      .catch(() => {
+        Alert.alert(
+          'Email Not Available', 
+          'Please send your bug report to rachael.alexander91@outlook.com',
+          [{ text: 'OK' }]
+        );
+      });
+  };
+
+  const handleFeatureRequest = () => {
+    const subject = encodeURIComponent('EndoCare Feature Request');
+    const body = encodeURIComponent(
+      'Feature/Improvement Request:\n\n' +
+      'Description:\n\n' +
+      'Why would this be helpful?\n\n' +
+      'How would you like it to work?\n\n' +
+      'Additional details:'
+    );
+    const emailUrl = `mailto:rachael.alexander91@outlook.com?subject=${subject}&body=${body}`;
+    
+    Linking.canOpenURL(emailUrl)
+      .then((supported) => {
+        if (supported) {
+          Linking.openURL(emailUrl);
+        } else {
+          Alert.alert(
+            'Email Not Available',
+            'Please send your feature request to rachael.alexander91@outlook.com',
+            [{ text: 'OK' }]
+          );
+        }
+      })
+      .catch(() => {
+        Alert.alert(
+          'Email Not Available',
+          'Please send your feature request to rachael.alexander91@outlook.com', 
+          [{ text: 'OK' }]
+        );
+      });
+  };
+
+  const handleGeneralFeedback = () => {
+    const subject = encodeURIComponent('EndoCare General Feedback');
+    const body = encodeURIComponent(
+      'Your feedback about EndoCare:\n\n' +
+      'What do you like most?\n\n' +
+      'What could be improved?\n\n' +
+      'Overall experience:\n\n' +
+      'Additional comments:'
+    );
+    const emailUrl = `mailto:rachael.alexander91@outlook.com?subject=${subject}&body=${body}`;
+    
+    Linking.canOpenURL(emailUrl)
+      .then((supported) => {
+        if (supported) {
+          Linking.openURL(emailUrl);
+        } else {
+          Alert.alert(
+            'Email Not Available',
+            'Please send your feedback to rachael.alexander91@outlook.com',
+            [{ text: 'OK' }]
+          );
+        }
+      })
+      .catch(() => {
+        Alert.alert(
+          'Email Not Available',
+          'Please send your feedback to rachael.alexander91@outlook.com',
+          [{ text: 'OK' }]
+        );
+      });
+  };
+
+  const handleContactSupport = () => {
+    const subject = encodeURIComponent('EndoCare Support Request');
+    const body = encodeURIComponent(
+      'Support Request:\n\n' +
+      'How can we help you?\n\n' +
+      'Details:\n\n' +
+      'Urgency: Normal / High\n\n' +
+      'Additional information:'
+    );
+    const emailUrl = `mailto:rachael.alexander91@outlook.com?subject=${subject}&body=${body}`;
+    
+    Linking.canOpenURL(emailUrl)
+      .then((supported) => {
+        if (supported) {
+          Linking.openURL(emailUrl);
+        } else {
+          Alert.alert(
+            'Email Not Available',
+            'Please contact support at rachael.alexander91@outlook.com',
+            [{ text: 'OK' }]
+          );
+        }
+      })
+      .catch(() => {
+        Alert.alert(
+          'Email Not Available',
+          'Please contact support at rachael.alexander91@outlook.com',
+          [{ text: 'OK' }]
+        );
+      });
+  };
+
+  const handleRateApp = async () => {
+    try {
+      await manuallyPromptRating();
+    } catch (error) {
+      Alert.alert(
+        'Unable to Rate',
+        'We couldn\'t open the rating dialog. You can manually rate EndoCare in the App Store.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
+  // Tip jar functionality
+  useEffect(() => {
+    initializeInAppPurchases();
+    return () => {
+      try {
+        if (RNIap.endConnection) {
+          RNIap.endConnection();
+        }
+      } catch (error) {
+        console.log('Error ending IAP connection:', error);
+      }
+    };
+  }, []);
+
+  const initializeInAppPurchases = async () => {
+    try {
+      // Check if running in Expo Go (in-app purchases not supported)
+      if (__DEV__ && !RNIap.initConnection) {
+        console.log('In-app purchases not available in development/Expo Go');
+        return;
+      }
+      
+      const connection = await RNIap.initConnection();
+      console.log('IAP connection result:', connection);
+      
+      // Define your tip product IDs (these need to be configured in App Store Connect)
+      const tipProductIds = [
+        'tip_199', // $1.99
+        'tip_499', // $4.99
+        'tip_999', // $9.99
+        'tip_1499' // $14.99
+      ];
+      
+      const products = await RNIap.getProducts({ skus: tipProductIds });
+      console.log('Retrieved products:', products);
+      setTipProducts(products);
+    } catch (error) {
+      console.log('In-app purchases not available in this environment:', error);
+      // Don't throw error - this is expected in Expo Go
+    }
+  };
+
+  const handleTip = async (productId: string, amount: string) => {
+    try {
+      setIsProcessingTip(productId);
+      
+      // Check if in-app purchases are available
+      if (__DEV__ && !RNIap.requestPurchase) {
+        Alert.alert(
+          'Development Mode',
+          'In-app purchases are not available in Expo Go. This feature will work in a production build.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      
+      const purchase = await RNIap.requestPurchase({ sku: productId });
+      
+      if (purchase) {
+        // Acknowledge the purchase
+        await RNIap.finishTransaction({ purchase, isConsumable: true });
+        
+        Alert.alert(
+          '✨ Thank You! ✨',
+          `Your ${amount} tip means the world to me! Thank you for supporting EndoCare and helping me continue to improve this app for the endometriosis community. 💜`,
+          [{ text: 'You\'re Welcome! 😊' }]
+        );
+      }
+    } catch (error: any) {
+      if (error.code === 'E_USER_CANCELLED') {
+        // User cancelled, don't show error
+        return;
+      }
+      
+      // In development, show a more helpful message
+      if (__DEV__) {
+        Alert.alert(
+          'Development Mode',
+          'In-app purchases require a production build. This feature will work when deployed to the App Store.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Tip Failed',
+          'There was an issue processing your tip. Please try again later.',
+          [{ text: 'OK' }]
+        );
+      }
+      console.log('Tip purchase not available in this environment:', error);
+    } finally {
+      setIsProcessingTip(null);
+    }
+  };
+
+  const getTipAmountFromProductId = (productId: string): string => {
+    switch (productId) {
+      case 'tip_199': return '$1.99';
+      case 'tip_499': return '$4.99';
+      case 'tip_999': return '$9.99';
+      case 'tip_1499': return '$14.99';
+      default: return '';
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -435,7 +691,7 @@ export default function ProfileScreen() {
         </View>
 
         {/* Other Diagnoses */}
-        <View style={[styles.section, { marginBottom: 100 }]}>
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>📋 Other Health Conditions</Text>
           {diagnoses.map((diagnosis, index) => (
             <View key={index} style={styles.medicationItem}>
@@ -453,6 +709,165 @@ export default function ProfileScreen() {
           ))}
           <TouchableOpacity onPress={addDiagnosis} style={styles.addButton}>
             <Text style={styles.addButtonText}>+ Add Other Condition</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Tip Jar Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>☕ Support EndoCare</Text>
+          <Text style={styles.supportDescription}>
+            EndoCare is completely free with no ads. If you find it helpful, consider leaving a tip to support continued development and new features! 💜
+          </Text>
+          
+          <View style={styles.tipContainer}>
+            <TouchableOpacity 
+              onPress={() => handleTip('tip_199', '$1.99')}
+              style={[styles.tipButton, isProcessingTip === 'tip_199' && styles.tipButtonDisabled]}
+              disabled={isProcessingTip === 'tip_199'}
+              accessibilityRole="button"
+              accessibilityLabel="Tip $1.99"
+              accessibilityHint="Leave a small tip to support the app"
+            >
+              <Text style={styles.tipAmount}>$1.99</Text>
+              <Text style={styles.tipLabel}>Tip 💜</Text>
+              {isProcessingTip === 'tip_199' && <Text style={styles.processingText}>Processing...</Text>}
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              onPress={() => handleTip('tip_499', '$4.99')}
+              style={[styles.tipButton, isProcessingTip === 'tip_499' && styles.tipButtonDisabled]}
+              disabled={isProcessingTip === 'tip_499'}
+              accessibilityRole="button"
+              accessibilityLabel="Tip $4.99"
+              accessibilityHint="Buy me a coffee to support the app"
+            >
+              <Text style={styles.tipAmount}>$4.99</Text>
+              <Text style={styles.tipLabel}>Coffee ☕</Text>
+              {isProcessingTip === 'tip_499' && <Text style={styles.processingText}>Processing...</Text>}
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              onPress={() => handleTip('tip_999', '$9.99')}
+              style={[styles.tipButton, isProcessingTip === 'tip_999' && styles.tipButtonDisabled]}
+              disabled={isProcessingTip === 'tip_999'}
+              accessibilityRole="button"
+              accessibilityLabel="Tip $9.99"
+              accessibilityHint="Buy me lunch to support the app"
+            >
+              <Text style={styles.tipAmount}>$9.99</Text>
+              <Text style={styles.tipLabel}>Lunch 🥗</Text>
+              {isProcessingTip === 'tip_999' && <Text style={styles.processingText}>Processing...</Text>}
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              onPress={() => handleTip('tip_1499', '$14.99')}
+              style={[styles.tipButton, styles.tipButtonPremium, isProcessingTip === 'tip_1499' && styles.tipButtonDisabled]}
+              disabled={isProcessingTip === 'tip_1499'}
+              accessibilityRole="button"
+              accessibilityLabel="Tip $14.99"
+              accessibilityHint="Buy me dinner to support the app"
+            >
+              <Text style={[styles.tipAmount, styles.tipAmountPremium]}>$14.99</Text>
+              <Text style={[styles.tipLabel, styles.tipLabelPremium]}>Dinner 🍽️</Text>
+              {isProcessingTip === 'tip_1499' && <Text style={styles.processingTextPremium}>Processing...</Text>}
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.tipDisclaimer}>
+            Tips are processed securely through the App Store. Thank you for your support! 🙏
+          </Text>
+        </View>
+
+        {/* Support & Feedback Section */}
+        <View style={[styles.section, { marginBottom: 100 }]}>
+          <Text style={styles.sectionTitle}>🛠️ Support & Feedback</Text>
+          <Text style={styles.supportDescription}>
+            Help us improve EndoCare by reporting bugs, requesting features, or sharing feedback.
+          </Text>
+          
+          <TouchableOpacity 
+            onPress={handleBugReport}
+            style={styles.supportButton}
+            accessibilityRole="button"
+            accessibilityLabel="Report a bug"
+            accessibilityHint="Opens bug report form to help improve the app"
+          >
+            <Text style={styles.supportButtonIcon}>🐛</Text>
+            <View style={styles.supportButtonContent}>
+              <Text style={styles.supportButtonTitle}>Report a Bug</Text>
+              <Text style={styles.supportButtonSubtitle}>
+                Found something that doesn&apos;t work? Let us know!
+              </Text>
+            </View>
+            <Text style={styles.supportButtonArrow}>→</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            onPress={handleFeatureRequest}
+            style={styles.supportButton}
+            accessibilityRole="button"
+            accessibilityLabel="Request a feature"
+            accessibilityHint="Suggest new features or improvements"
+          >
+            <Text style={styles.supportButtonIcon}>💡</Text>
+            <View style={styles.supportButtonContent}>
+              <Text style={styles.supportButtonTitle}>Request a Feature</Text>
+              <Text style={styles.supportButtonSubtitle}>
+                Have an idea to make EndoCare better?
+              </Text>
+            </View>
+            <Text style={styles.supportButtonArrow}>→</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            onPress={handleGeneralFeedback}
+            style={styles.supportButton}
+            accessibilityRole="button"
+            accessibilityLabel="Send general feedback"
+            accessibilityHint="Share your thoughts about the app"
+          >
+            <Text style={styles.supportButtonIcon}>💬</Text>
+            <View style={styles.supportButtonContent}>
+              <Text style={styles.supportButtonTitle}>General Feedback</Text>
+              <Text style={styles.supportButtonSubtitle}>
+                Share your thoughts and suggestions
+              </Text>
+            </View>
+            <Text style={styles.supportButtonArrow}>→</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            onPress={handleContactSupport}
+            style={styles.supportButton}
+            accessibilityRole="button"
+            accessibilityLabel="Contact support"
+            accessibilityHint="Get direct help from the support team"
+          >
+            <Text style={styles.supportButtonIcon}>📧</Text>
+            <View style={styles.supportButtonContent}>
+              <Text style={styles.supportButtonTitle}>Contact Support</Text>
+              <Text style={styles.supportButtonSubtitle}>
+                Need help? Get direct assistance
+              </Text>
+            </View>
+            <Text style={styles.supportButtonArrow}>→</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            onPress={handleRateApp}
+            style={[styles.supportButton, { backgroundColor: colors.primaryLight }]}
+            accessibilityRole="button"
+            accessibilityLabel="Rate the app"
+            accessibilityHint="Rate EndoCare in the App Store"
+          >
+            <Text style={styles.supportButtonIcon}>⭐</Text>
+            <View style={styles.supportButtonContent}>
+              <Text style={[styles.supportButtonTitle, { color: colors.primary }]}>Rate EndoCare</Text>
+              <Text style={[styles.supportButtonSubtitle, { color: colors.primary }]}>
+                Love the app? Leave us a review!
+              </Text>
+            </View>
+            <Text style={[styles.supportButtonArrow, { color: colors.primary }]}>→</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -486,7 +901,7 @@ export default function ProfileScreen() {
           {/* Modal Content */}
           <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
             <Text style={styles.modalInstructions}>
-              Tap to select the vitamins and supplements you're currently taking:
+              Tap to select the vitamins and supplements you&rsquo;re currently taking:
             </Text>
             <View style={styles.modalVitaminList}>
               {commonVitamins.map((vitamin) => (
@@ -871,5 +1286,116 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: colors.white,
     color: colors.gray800,
+  },
+  supportDescription: {
+    fontSize: 14,
+    color: colors.gray600,
+    marginBottom: 16,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  supportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  supportButtonIcon: {
+    fontSize: 24,
+    marginRight: 16,
+  },
+  supportButtonContent: {
+    flex: 1,
+  },
+  supportButtonTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.gray800,
+    marginBottom: 4,
+  },
+  supportButtonSubtitle: {
+    fontSize: 14,
+    color: colors.gray600,
+    lineHeight: 18,
+  },
+  supportButtonArrow: {
+    fontSize: 18,
+    color: colors.gray400,
+    fontWeight: '500',
+  },
+  // Tip jar styles
+  tipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 16,
+  },
+  tipButton: {
+    flex: 1,
+    minWidth: '48%',
+    backgroundColor: colors.white,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.primary,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  tipButtonPremium: {
+    backgroundColor: colors.primaryLight,
+    borderColor: colors.primary,
+  },
+  tipButtonDisabled: {
+    opacity: 0.6,
+  },
+  tipAmount: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.primary,
+    marginBottom: 4,
+  },
+  tipAmountPremium: {
+    color: colors.primary,
+  },
+  tipLabel: {
+    fontSize: 14,
+    color: colors.gray600,
+    fontWeight: '500',
+  },
+  tipLabelPremium: {
+    color: colors.primary,
+  },
+  processingText: {
+    fontSize: 12,
+    color: colors.gray500,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  processingTextPremium: {
+    fontSize: 12,
+    color: colors.primary,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  tipDisclaimer: {
+    fontSize: 12,
+    color: colors.gray500,
+    textAlign: 'center',
+    lineHeight: 16,
+    fontStyle: 'italic',
   },
 });

@@ -1,17 +1,44 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from 'react-native';
 
-export const saveData = async (key: string, data: any): Promise<void> => {
-  try {
-    await AsyncStorage.setItem(key, JSON.stringify(data));
-  } catch (error) {
-    console.error('Error saving data:', error);
+export const saveData = async (key: string, data: any, retryCount = 3): Promise<boolean> => {
+  for (let attempt = 1; attempt <= retryCount; attempt++) {
+    try {
+      await AsyncStorage.setItem(key, JSON.stringify(data));
+      return true;
+    } catch (error) {
+      console.error(`Error saving data (attempt ${attempt}/${retryCount}):`, error);
+      
+      if (attempt === retryCount) {
+        // Final attempt failed - notify user
+        Alert.alert(
+          'Data Save Error',
+          'Unable to save your data. Please ensure you have enough storage space and try again. Your recent changes may be lost if you close the app.',
+          [{ text: 'OK' }]
+        );
+        return false;
+      }
+      
+      // Wait before retry (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+    }
   }
+  return false;
 };
 
 export const loadData = async (key: string): Promise<any> => {
   try {
     const data = await AsyncStorage.getItem(key);
-    return data ? JSON.parse(data) : null;
+    if (data) {
+      try {
+        return JSON.parse(data);
+      } catch (parseError) {
+        console.error('Error parsing stored data:', parseError);
+        // Data is corrupted, return null to start fresh
+        return null;
+      }
+    }
+    return null;
   } catch (error) {
     console.error('Error loading data:', error);
     return null;

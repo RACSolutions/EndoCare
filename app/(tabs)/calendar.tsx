@@ -29,23 +29,23 @@ export default function CalendarScreen() {
   const [selectedModalDate, setSelectedModalDate] = useState<Date | null>(null);
   const [modalTimestamp, setModalTimestamp] = useState(0);
 
-  // Debug modal state changes
-  useEffect(() => {
-    console.log('Modal state changed:', { dailyModalVisible, selectedModalDate: selectedModalDate?.toLocaleDateString() });
-  }, [dailyModalVisible, selectedModalDate]);
   
-  const { getSymptomSeverityForDate, entries, refreshEntries } = useEndoData();
+  const { getSymptomSeverityForDate, entries, refreshEntries, profileData } = useEndoData();
 
   // Force refresh whenever we come to this screen or tab is pressed
   useFocusEffect(
     useCallback(() => {
-      console.log('Calendar focused - forcing refresh...');
       // Force refresh entries from storage
       refreshEntries();
       // Force a complete re-render by updating the refresh key
       setRefreshKey(prev => prev + 1);
     }, [refreshEntries])
   );
+
+  // Also refresh when entries change to ensure real-time updates
+  useEffect(() => {
+    setRefreshKey(prev => prev + 1);
+  }, [entries]);
 
   // Pull to refresh handler - resets to show all
   const onRefresh = useCallback(async () => {
@@ -110,13 +110,14 @@ export default function CalendarScreen() {
       return ['✅']; // Green checkmark for no symptoms day
     }
     
-    const categoryIcons = {
+    
+    const categoryIcons: { [key: string]: string } = {
       pain: '🔥',
       menstrual: '🩸', 
       digestive: '🤢',
       emotional: '😔',
       physical: '💪',
-      sleepEnergy: '😴'  // ADDED: Sleep & Energy category
+      sleepEnergy: '😴'
     };
     
     // In "show all" mode, show everything. Otherwise, apply filters
@@ -125,8 +126,11 @@ export default function CalendarScreen() {
       if (entry.symptoms) {
         const activeCategories = Object.keys(entry.symptoms);
         activeCategories.forEach(category => {
-          if (categoryIcons[category] && Object.keys(entry.symptoms[category]).length > 0) {
-            icons.push(categoryIcons[category]);
+          if (categoryIcons[category]) {
+            const categorySymptoms = entry.symptoms[category];
+            if (categorySymptoms && typeof categorySymptoms === 'object' && Object.keys(categorySymptoms).length > 0) {
+              icons.push(categoryIcons[category]);
+            }
           }
         });
       }
@@ -141,14 +145,19 @@ export default function CalendarScreen() {
       // Handle symptoms
       if (entry.symptoms && symptomFilters.length > 0) {
         const hasMatchingSymptom = Object.values(entry.symptoms).some(categorySymptoms => 
+          categorySymptoms && typeof categorySymptoms === 'object' &&
           Object.keys(categorySymptoms).some(symptom => symptomFilters.includes(symptom))
         );
         
         if (hasMatchingSymptom) {
           const activeCategories = Object.keys(entry.symptoms);
           activeCategories.forEach(category => {
-            if (categoryIcons[category] && Object.keys(entry.symptoms[category]).some(symptom => symptomFilters.includes(symptom))) {
-              icons.push(categoryIcons[category]);
+            if (categoryIcons[category]) {
+              const categorySymptoms = entry.symptoms[category];
+              if (categorySymptoms && typeof categorySymptoms === 'object' && 
+                  Object.keys(categorySymptoms).some(symptom => symptomFilters.includes(symptom))) {
+                icons.push(categoryIcons[category]);
+              }
             }
           });
         }
@@ -450,6 +459,8 @@ export default function CalendarScreen() {
         selectedFilters={filterType === 'symptoms' ? symptomFilters : activityFilters}
         onClose={() => setFilterModalVisible(false)}
         onApplyFilters={handleApplyFilters}
+        customSymptoms={profileData?.customSymptoms}
+        customActivities={profileData?.customActivities}
       />
     </SafeAreaView>
   );
